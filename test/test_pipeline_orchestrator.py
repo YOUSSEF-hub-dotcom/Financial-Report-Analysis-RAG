@@ -232,7 +232,7 @@ class TestCacheMiss:
         mock_components["qdrant"].search.assert_called_once()
         call_args = mock_components["qdrant"].search.call_args
         assert call_args[0][0] == [0.1] * 768  # query embedding
-        assert call_args[1]["top_k"] == 5
+        assert call_args[1]["top_k"] == 3
 
     def test_mongo_enrichment_called(self, pipeline, mock_components):
         pipeline.query("What is Apple's revenue?")

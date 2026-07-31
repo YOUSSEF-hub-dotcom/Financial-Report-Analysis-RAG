@@ -464,7 +464,7 @@ class QdrantIndexer:
     def search(
         self,
         query_embedding: list[float],
-        top_k: int = 5,
+        top_k: int = 3,
         ticker: str | None = None,
         fiscal_year: str | None = None,
     ) -> list[dict]:
@@ -606,7 +606,7 @@ class DualStorageIndexer:
     def search_similar(
         self,
         query_text: str,
-        top_k: int = 5,
+        top_k: int = 3,
         ticker: str | None = None,
         fiscal_year: str | None = None,
     ) -> list[dict]:

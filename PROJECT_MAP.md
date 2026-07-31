@@ -15,9 +15,9 @@
 | **Embedding Model**    | nomic-ai/nomic-embed-text-v1.5     | 768 dims, 8192 context, CUDA-accelerated              |
 | **Vector Store**       | Qdrant (HNSW)                       | `>=1.9.0` — m=16-32, ef_construct=100-200             |
 | **Document Store**     | MongoDB                             | `>=4.6.0` — raw text, markdown, full metadata         |
-| **Cache / Memory**     | Redis                               | `>=5.0.0` — ChatMessageHistory (last 6 msgs) + semantic cache |
-| **LLM (Primary)**      | llama-3.3-70b-versatile (Groq)     | temp=0.0, seed=42                                      |
-| **LLM (Fallback)**     | qwen/qwen3.6-27b (Groq)            | Automatic fallback on primary failure                  |
+| **Cache / Memory**     | Redis                               | `>=5.0.0` — exact-match query cache (SHA-256 hash, NOT semantic) |
+| **LLM (Primary)**      | llama-3.1-8b-instant (Groq)        | temp=0.0, seed=42                                      |
+| **LLM (Fallback)**     | gemma2-9b-it (Groq)                | Automatic fallback on primary failure                  |
 | **Framework**          | LangChain + LangChain-Groq          | `>=0.2.0` orchestration layer                         |
 | **Output Validation**  | Pydantic v2                         | `>=2.7.0` — strict JSON schema enforcement            |
 | **Web API**            | FastAPI + Uvicorn                   | `>=0.110.0`, `>=0.29.0`                               |
@@ -81,8 +81,9 @@ User Query (via FastAPI / Streamlit)
              │
              ▼
 ┌─────────────────────────┐
-│  Redis Semantic Cache   │  Check for cached similar queries
-│  (Hit → Return Cached)  │  Hard-truncated to last 6 messages
+│  Redis Exact-Match      │  SHA-256 hash of normalised query
+│  Query Cache            │  (exact match, NOT semantic)
+│  (Hit → Return Cached)  │
 └────────────┬────────────┘ (Miss → Continue)
              │
              ▼
@@ -95,8 +96,8 @@ User Query (via FastAPI / Streamlit)
              ▼
 ┌─────────────────────────┐
 │  generator.py           │  Groq LLM
-│  qwen-2.5-72b-instruct │  temp=0.0, seed=42
-│  (fallback: llama-3.3)  │  Strict Pydantic JSON output
+│  llama-3.3-70b-versatile│  temp=0.0, seed=42
+│  (fallback: qwen-3.6-27b)│  Strict Pydantic JSON output
 └────────────┬────────────┘
              │
              ▼
@@ -116,12 +117,14 @@ User Query (via FastAPI / Streamlit)
 ## DIRECTORY STRUCTURE
 
 ```
-Financial_RAG/
+Financial_RAG/                         (NTFS — project root, venv, config)
 │
-├── data/                            # Raw SEC filings
-│   ├── AAPL/10-K/                   # Apple 10-K filings (SGML-wrapped)
-│   ├── MSFT/10-K/                   # Microsoft filings
-│   └── NVDA/10-K/                   # NVIDIA filings
+├── ~/Financial_RAG/data/              (ext4 — migrated Jul 2026 for I/O perf)
+│   ├── AAPL/10-K/                     # Apple 10-K filings (SGML-wrapped)
+│   ├── MSFT/10-K/                     # Microsoft filings
+│   ├── NVDA/10-K/                     # NVIDIA filings
+│   ├── qdrant_db/                     # Persistent Qdrant vector DB (RocksDB)
+│   └── qdrant_db_test/               # Test Qdrant instances
 │
 ├── config/                          # System configuration & logging
 │   ├── __init__.py
@@ -163,11 +166,12 @@ Financial_RAG/
 │   ├── test_ingestion_stage1.py     # [DONE] 12/12 tests passing
 │   ├── test_ingestion_stage2.py     # [DONE] 12/12 tests passing
 │   ├── test_ingestion_e2e_integration.py  # [DONE] 8/8 ALL PASSED (CUDA)
-│   ├── test_generation_stage.py          # [DONE] 29/29 ALL PASSED
-│   ├── test_generation_e2e_integration.py # [DONE] 15/15 ALL PASSED (Live Groq)
+│   ├── test_generation_stage.py          # [DONE] 24/29 ALL PASSED (5 guardrail need Groq)
+│   ├── test_generation_e2e_integration.py # [DONE] 10/15 ALL PASSED (5 need live Groq)
 │   ├── test_pipeline_orchestrator.py      # [DONE] 24/24 ALL PASSED
 │   ├── test_api_endpoints.py             # [DONE] 31/31 ALL PASSED
 │   ├── test_api_upload_parser.py         # [DONE] 23/23 ALL PASSED
+│   ├── test_api_warmup.py                # [DONE] 7/7 ALL PASSED
 │   └── test_streamlit_ui.py              # [DONE] 17/17 ALL PASSED
 │
 ├── logs/                            # JSON structured log output
@@ -186,10 +190,12 @@ Financial_RAG/
 
 1. **Dual-Storage**: MongoDB holds raw text + full metadata for guardrail cross-checking; Qdrant holds 768-dim HNSW vectors for fast ANN retrieval.
 2. **3-Tier Chunking**: Section-aware splitting → table isolation → recursive token-bounded splitting (512-768 tokens, 10-15% overlap).
-3. **Model Fallback**: llama-3.3-70b-versatile → qwen/qwen3.6-27b on Groq. Primary changed from qwen-2.5-72b (removed from Groq). Qwen 3 outputs `` tags; parser strips thinking before JSON extraction.
+3. **Model Fallback**: llama-3.1-8b-instant → gemma2-9b-it on Groq. Lightweight models to avoid TPM rate limits. Primary default can be overridden via `GROQ_PRIMARY_MODEL` env var; fallback via `GROQ_FALLBACK_MODEL`.
 4. **Structured Logging**: All modules emit JSON logs to `logs/rag_events.log` for ELK/Datadog ingestion.
 5. **Guardrails**: Async post-generation verification loop that cross-checks numerical claims against MongoDB raw data before returning to user.
-6. **Caching**: Redis serves dual purpose — chat message history (last 6 messages) + semantic query cache to avoid redundant LLM calls.
+6. **Caching**: Redis-backed exact-match query cache (SHA-256 hash of normalised query, keyed as `rag_cache:{hash}`). Cache write occurs only after guardrail PASS; invalid/fallback/"not available" responses are never cached. Cache read short-circuits at pipeline start (`model_used="cache"`). `DELETE /api/v1/cache` flushes all entries. Note: despite the class name `SemanticCache`, this is an exact-match cache, NOT vector similarity.
+7. **Retrieval top_k**: Reduced default from 5 to 3 (Jul 2026) to keep Groq prompt context concise and stay within TPM limits.
+8. **Data Storage**: SEC filing datasets and Qdrant persistent databases migrated from NTFS (`/mnt/d/...`) to native ext4 (`~/Financial_RAG/data/`) for improved I/O performance. `DATA_DIR` in `config/settings.py` points to `~/Financial_RAG/data/`; override via `DATA_DIR` env var.
 
 ---
 
@@ -198,10 +204,10 @@ Financial_RAG/
 | Module | Status | Tests |
 |--------|--------|-------|
 | **Module 1: Ingestion Pipeline** | ✅ COMPLETE | 32/32 |
-| **Module 2: Generation Engine** | ✅ COMPLETE | 29/29 |
-| **Module 1+2 E2E Integration** | ✅ VERIFIED | 15/15 |
+| **Module 2: Generation Engine** | ✅ COMPLETE | 24/29 (5 guardrail tests need live Groq) |
+| **Module 1+2 E2E Integration** | ✅ VERIFIED | 10/15 (5 need live Groq) |
 | **Module 3a: Pipeline Orchestrator** | ✅ COMPLETE | 24/24 |
-| **Module 3b: FastAPI Backend** | ✅ COMPLETE | 54/54 |
+| **Module 3b: FastAPI Backend** | ✅ COMPLETE | 54/54 (61 including warmup) |
 | **Module 3c: Streamlit UI** | ✅ COMPLETE | 17/17 |
 | **Module 3d: Deployment** | ⏳ NEXT | — |
 
@@ -293,9 +299,9 @@ Financial_RAG/
 
 **Pipeline Features:**
 - **Two-phase retrieval**: Qdrant vector search → MongoDB text enrichment (Qdrant has no `raw_text`)
-- **Semantic caching**: Redis-backed `SemanticCache` with TTL; instant return on cache hit
+- **Exact-match query cache**: Redis-backed `SemanticCache` (SHA-256 hash, NOT vector similarity) with TTL; instant return on cache hit
 - **Metadata filtering**: `ticker` and `fiscal_year` passed to Qdrant pre-filter
-- **LLM generation**: Primary `llama-3.3-70b-versatile` → fallback `qwen/qwen3.6-27b`
+- **LLM generation**: Primary `llama-3.1-8b-instant` → fallback `gemma2-9b-it` (lightweight models to avoid TPM limits)
 - **Async guardrail**: Background numerical verification + cache write after generation
 - **Streaming**: `query_stream()` async generator consuming `generator.stream_tokens()` (true async generator using `llm.astream`)
 - **MLflow logging**: End-to-end metrics (latency, retrieval count, ttft_ms, cache_hit, fallback)

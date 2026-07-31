@@ -333,7 +333,8 @@ class TestAPIUploadIntegration:
             files={"file": ("save_test.pdf", pdf_bytes, "application/pdf")},
         )
         assert resp.status_code == 200
-        saved = _PROJECT_ROOT / "data" / "TEST" / "10-K" / "2024" / "save_test.pdf"
+        from config.settings import DATA_DIR
+        saved = DATA_DIR / "TEST" / "10-K" / "2024" / "save_test.pdf"
         assert saved.exists()
         saved.unlink()
         saved.parent.rmdir()
@@ -347,7 +348,8 @@ class TestAPIUploadIntegration:
             files={"file": ("save_test.docx", docx_bytes, "application/docx")},
         )
         assert resp.status_code == 200
-        saved = _PROJECT_ROOT / "data" / "TEST" / "10-K" / "2024" / "save_test.docx"
+        from config.settings import DATA_DIR
+        saved = DATA_DIR / "TEST" / "10-K" / "2024" / "save_test.docx"
         assert saved.exists()
         saved.unlink()
         saved.parent.rmdir()

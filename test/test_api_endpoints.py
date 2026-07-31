@@ -309,7 +309,8 @@ class TestDocumentUpload:
             files={"file": ("save_test.txt", content, "text/plain")},
         )
         assert resp.status_code == 200
-        saved = _PROJECT_ROOT / "data" / "TEST" / "10-K" / "2024" / "save_test.txt"
+        from config.settings import DATA_DIR
+        saved = DATA_DIR / "TEST" / "10-K" / "2024" / "save_test.txt"
         assert saved.exists()
         saved.unlink()  # cleanup
         # Clean up empty dirs

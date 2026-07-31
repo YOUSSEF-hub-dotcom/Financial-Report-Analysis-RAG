@@ -71,7 +71,7 @@ class FinancialRAGPipeline:
         temperature: float = LLM_TEMPERATURE,
         max_tokens: int = LLM_MAX_TOKENS,
         seed: int = LLM_SEED,
-        top_k: int = 5,
+        top_k: int = 3,
         enable_cache: bool = True,
         enable_guardrail: bool = True,
     ):
@@ -208,7 +208,7 @@ class FinancialRAGPipeline:
         ticker: Optional[str] = None,
         fiscal_year: Optional[str] = None,
         session_id: Optional[str] = None,
-        top_k: int = 5,
+        top_k: int = 3,
     ) -> dict[str, Any]:
         """
         Execute a full RAG query end-to-end.
@@ -401,7 +401,7 @@ class FinancialRAGPipeline:
         ticker: Optional[str] = None,
         fiscal_year: Optional[str] = None,
         session_id: Optional[str] = None,
-        top_k: int = 5,
+        top_k: int = 3,
     ) -> AsyncIterator[str]:
         """
         Streaming RAG query — yields LLM tokens as they arrive.

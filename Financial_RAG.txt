@@ -1,0 +1,256 @@
+Structure Folder: 
+Financial_RAG/
+│
+├── data/                            # مجلد البيانات الخام (ممنوع وضع أي كود هنا)
+│   ├── AAPL_10K_2025.html
+│   ├── MSFT_10K_2025.html
+│   └── NVDA_10K_2025.txt
+│
+├── config/                          # الإعدادات وثوابت النظام
+│   ├── __init__.py
+│   ├── settings.py                  # مفاتيح API، مسارات الملفات، إعدادات DB و Redis
+│   └── logging_config.py            # تهيئة الـ Structured JSON Logging الموحد
+│
+├── src/                             # الكود المصدري الرئيسي للنظام
+│   ├── __init__.py
+│   │
+│   ├── 1_ingestion/                 # الموديول الأول: المعالجة والتخزين الأوفلاين
+│   │   ├── __init__.py
+│   │   ├── html_table_parser.py     # استخراج وتقطيع الجداول والنصوص من الـ HTML/txt
+│   │   ├── cleaning.py              # تنظيف الداتا 
+│   │   │─ hybrid_chunker.py        # التقطيع الهجين المقيد بـ Tokenizer الـ Nomic
+│   │   ├── metadata_extractor.py   # استخراج الميتاداتا
+│   │   └── database_indexer.py      # الرفع والتخزين المزدوج في MongoDB و Qdrant & Embedding
+│   │
+│   │ 
+│   ├── 2_generation/                # الموديول الخامس: محرك التوليد والـ Guardrail
+│   │   ├── __init__.py
+│   │   ├── schemas.py               # تعريف Pydantic Schema الموحدة للإجابة
+│   │   ├── generator.py             # التوليد الأحادي المقيد عبر Groq API
+│   │   └── async_guardrail.py       # فحص الهلوسة الرقمية المتوازي خلف الكواليس
+│   │
+│   └── pipeline.py                  # الـ Main Orchestrator الذي يربط كافة المحطات أونلاين
+│
+├── app/                             # الموديول : الواجهات والنشر
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── main.py                  # FastAPI Application (Endpoints)
+│   └── ui/
+│       └── streamlit_app.py         # Streamlit Dashboard / Chat Interface
+│
+├── logs/                            # مجلد حفظ سجلات الـ JSON الهيكلية
+│   └── rag_events.log
+├── test                             # خاص ب tests اللى هنعملها بعد كل جزء للتأكد ان الدنيا تمام  
+├── .env                             # متغيرات البيئة والأسرار (API Keys, DB Credentials)
+├── .gitignore
+├── requirements.txt                 # جميع المكتبات المطلوبة بالمشروع
+└── README.md                        # التوثيق الشامل للمشروع
+
+
+
+================================
+Ingestion (Offline)
+================================
+Parsing tool:
+أتفق معك تماماً في أن تحويل الجداول إلى Markdown Tables هو الخيار الهندسي الأفضل لـ Tokenizer الـ LLM. ولضمان عدم تفكك جداول الـ SEC المعقدة، سنعتمد على BeautifulSoup4 المدمجة مع Pandas.to_markdown() لبناء Custom HTML Parser، مما يمنحنا تحكماً كاملاً في استخراج الجداول وحفظ الـ Metadata. دعنا ننتقل للنقطة التالية:
+--------------------
+Metadata Handling : 
+📋 قائمة الميتاداتا الأساسية المطلوبة لمشروعنا:
+ticker (رمز الشركة): مثل AAPL, MSFT, NVDA. (ضروري جداً للمقارنات وتحديد نطاق البحث).
+fiscal_year (السنة المالية): مثل 2024, 2025, 2026.
+doc_type (نوع المستند): مثل 10-K, 10-Q, أو Uploaded_PDF (للتفرقة بين التقارير الرسمية والملفات التي يرفعها المستخدم).
+doc_id / source_file (معرف الملف): اسم الملف المصدر لضمان الـ Traceability والتأكد من المصدر عند إخراج الإجابة.
+section (القسم الداخلي في التقرير): مثل:
+Item 1A: Risk Factors
+Item 7: Management's Discussion and Analysis (MD&A)
+Item 8: Financial Statements
+(هذه الميتاداتا فائقة الأهمية لأن الأسئلة المالية غالباً ما تستهدف قسماً محدداً).
+contains_table (نوع المحتوى): قيمة بولية (True / False) تحدد ما إذا كان هذا الـ Chunk يحتوي على جدول مالي أم نص عادي. (تساعد الـ LLM في التركيز على الأرقام عند الاستعلامات الحسابية).
+page_number / chunk_id: للوصول السريع لموقع النص الأصلي.
+--------------------
+(Cleaning Strategy):
+اتفق معك تماماً، الخطة التي وضعتها لتنظيف الـ Noise ممتازة. لكن في المجال المالي، هناك خطوط حمراء يجب الانتباه لها أثناء عملية الـ Normalization:
+⚠️ محذورات وإرشادات مهمة عند تنظيف البيانات المالية:
+عدم مسح الإشارات والرموز المالية:
+عدم حذف الأقواس () لأنها في القوائم المالية تعني أرقام بالسالب (مثل (150) تعني -150 مليون).
+عدم حذف العملات أو الرموز مثل $, %, M (Million), B (Billion).
+إصلاح المسافات بحذر (Whitespace Normalization):
+يجب إزالة المسافات الزائدة والنصوص المتكررة (مثل Headers/Footers الخاصة بالصفحات).
+لكن داخل الجداول، يجب الحفاظ على فاصلة العناوين والأعمدة حتى لا تلتصق الأرقام بأسماء الحسابات المباشرة.
+إزالة الـ HTML Noise الخالي من المعنى: إزالة ستايلات الـ CSS، أكواد الـ JavaScript، وسوم التنسيق المتروكة مثل <div>, <span>, style=... مع الإبقاء فقط على النصوص والهيكل.
+--------------------
+🏗️ هيكلية الـ Chunking والتخزين الكاملة (Three-Tier Architecture & Dual-Storage)
+سنعتمد استراتيجية التقطيع الهجينة المدمجة (Document-Specific Semantic + Recursive Structural Chunking) المكونة من 3 مستويات متكاملة لضمان الدقة المالية والحفاظ على الجداول، مع ربطها بنظام تخزين مزدوج محكم (MongoDB + Vector DB):
+المستوى الأول: Document-Specific Sectioning (التقطيع بحسب أقسام الـ 10-K الرسمية)
+تقطيع التقرير أوفلاين بناءً على الأقسام الهيكلية الرئيسية (مثل Item 1A: Risk Factors, Item 7: MD&A, Item 8: Financial Statements).
+الفائدة: إسناد قيمة القسم فوراً لخانة الميتاداتا الصريحة (section = "Item 7").
+ المستوى الثاني: Table & Block Isolation (عزل الجداول والملاحظات المرفقة)
+تحويل أي جدول مالي إلى Markdown Table واعتباره Atomic Chunk (كتلة قائمة بذاتها لا تُقطع من المنتصف).
+دمج العنوان المباشر للجدول والملاحظات المحاسبية أسفله (Footnotes) في نفس الـ Chunk لربط الأرقام بتفسيراتها وإلغاء أي احتمال للهلوسة الحسابية.
+المستوى الثالث: Recursive Structural Alignment (التقسيم الهيكلي للنصوص العادية)
+تقطيع الفقرات النصية والتحليلية الشارحة داخل الأقسام باستخدام RecursiveCharacterTextSplitter.
+حجم الـ Chunk النصي (Target Chunk Size): يتراوح بين 512 إلى 768 Tokens (مستغلين السعة العالية لموديل الترميز).
+نسبة التداخل (Overlap): من 10% إلى 15% (حوالي 60 إلى 80 Tokens) لضمان عدم ضياع السياق المالي بين الفقرات.
+ربط الـ Splitter بـ Tokenizer الموديل: إجبار الـ Chunk Splitter على قياس حجم الـ Chunk بعدد التوكنز الفعلية باستخدام نفس الـ Tokenizer الخاص بموديل الـ Embedding المعتمد وليس بعدد الحروف (Characters) لمنع حدوث اقتطاع مفاجئ أثناء التضمين.
+آلية التخزين والربط المزدوج (Storage Architecture & Payload Distribution)
+لضمان أعلى كفاءة وأسرع استجابة دون إثقال قاعدة البيانات الدلالية، يتم توزيع المخرجات كالتالي:
+أولاً: التخزين الكامل في الـ Normal DB (MongoDB)
+إنشاء وقطع الـ Chunks وإسناد معرف فريد خاش (chunk_id) لكل قطعة.
+تخزين الوثيقة الكاملة في MongoDB وتحتوي على:
+الـ chunk_id (كـ Primary Key).
+النص الخام الكامل للنص أو جدول الماركداون المكتمل المرفق بالهامش (raw_text).
+قائمة الميتاداتا الهيكلية بالكامل (ticker, fiscal_year, section, doc_type, contains_table, source_file, page_number).
+تحديث القاموس (Python Dictionary): إضافة الـ chunk_id المولد أوتوماتيكياً للـ Metadata Dictionary.
+--------------------
+جزء موديل الـ Embedding المعتمد ومواصفاته : work on gpu(cuda)
+اسم الموديل المعتمد: nomic-ai/nomic-embed-text-v1.5 (Open Source).
+سعة التوكنز (Context Window): 8192 Tokens (تمنحنا أريحية كاملة للـ 768 Tokens واستيعاب الجداول المالية الممتدة بالكامل دون حدوث Truncation).
+الأبعاد الرياضية (Dimensionality): 768 Dimensions (توازن مثالي بين الدقة الدلالية والسرعة واستهلاك الـ Memory أثناء التشغيل المحلي).
+مقياس المسافة الرياضي (Distance Metric): Cosine Similarity (أو Dot Product بعد عمل Normalization للـ Vectors) لقياس التشابه الزاوي بين استعلام المستخدم والفقرات المالية دقةً.
+--------------------
+VectorDB :
+اختيار قاعدة البيانات الدلالية (Vector DB):
+الخيار الموصى به بشدة لمشروعنا: Qdrant
+لماذا؟ لأن Qdrant متميزة جداً في الـ Payload Indexing & Pre-Filtering. في داتانا المالية، سنعتمد بكثرة على الاستعلامات المفلترة بـ (ticker, fiscal_year, section)؛ و Qdrant تُنفّذ هذه الفلاتر الصارمة على الميتاداتا بسرعة فائقة في أجزاء من المليثانية قبل البدء في حساب المسافات الرياضية للـ Vectors.
+البديل السريع للبيئة المحلية: ChromaDB (ممتازة للتجريب السريع، لكن Qdrant أفضل وأجهز للـ Production Performance).
+ تفعيل الـ Indexing: HNSW (Hierarchical Navigable Small World)
+تفعيل خوارزمية HNSW يضمن إجراء عمليات البحث الدلالي بشكل متوازٍ وفائق السرعة (Approximate Nearest Neighbor Search).
+سنقوم بضبط المعاملات لتناسب الدقة المالية:
+m (عدد الوصلات بين النقاط في الـ Graph): يفضل ضبطه على قيمة متوسطة إلى عالية (مثل 16 أو 32) لزيادة دقة البحث مع الأرقام.
+ef_construct: ضبطه على قيمة مثل 100 إلى 200 عند بناء الـ Index أوفلاين لضمان جودة الربط واسترجاع النتائج الصحيحة دون إغفال التفاصيل الحساسة.
+قياس المسافة الرياضية (Distance Metric): Cosine Similarity
+المعيار المحدد: بناءً على اختيارنا لموديل الترميز nomic-ai/nomic-embed-text-v1.5، فإن المقياس الرياضي الموصى به هو Cosine Similarity (أو Dot Product في حال إجراء Normalization للمتجهات).
+الفائدة: يقيس التشابه الزاوي بين متجه سؤال المستخدم ومتجهات الفقرات والجداول المالية بصرف النظر عن طول النص.
+ تخزين الـ Vectors والميتاداتا المحدثة (Payload Storage):
+تخزين الـ Vector الناتج عن الموديل (بحجم 768 أبعاد).
+تخزين الـ Payload الخفيف والمحدث المرفق بالـ chunk_id القادم من MongoDB، والذي يشمل فلاتر التشغيل السريعة
+==============================================================================
+⚙️ Generation Engine Architecture Specification
+This module governs the response synthesis pipeline, prioritizing low latency, financial precision, structural integrity, and zero-hallucination execution.
+
+1. Core Engine Specifications & Models
+الأساسي (Primary Model):
+qwen-2.5-72b-instruct (عبر Groq API)
+يستخدم كالمحرك الرئيسي لجميع استعلامات التحليل المالي والـ JSON Structured Output.
+الاحتياطي (Fallback Model):
+llama-3.3-70b-versatile (عبر Groq API)
+يُحَوَّل إليه الطلب فوراً وبشكل صامت في حال وصول الـ Rate Limit لـ Qwen أو حدوث أي خطأ عابر في السيرفر.
+
+Deterministic Hyperparameters:
+temperature = 0.0
+seed = 42
+max_tokens = 2048
+--
+2. Context Ingestion & Memory Management
+Optimized Conversation Memory: Managed via RedisChatMessageHistory integrated through RunnableWithMessageHistory. The history is hard-truncated to the last 4 to 6 messages ($N=6$) to minimize token budgeting and eliminate context noise.
+Financial XML Enclosure: Retrieved candidate chunks (top 3–5) from Qdrant/MongoDB are enclosed within structural XML tags:
+<CONTEXT>
+  <DOCUMENT ticker="AAPL" fiscal_year="2025" section="Item 7" source="Apple_10K_2025.html" page="45" contains_table="true">
+    [Cleaned text or Markdown Table extracted from MongoDB]
+  </DOCUMENT>
+</CONTEXT>
+--
+3. Strict Structural Enforcement (Pydantic Schema)
+To guarantee compliance, prompting alone is insufficient. The LLM output is strictly bound to a single-pass JSON response schema using Pydantic:
+from pydantic import BaseModel, Field
+from typing import List
+
+class ConsolidatedFinancialAnswer(BaseModel):
+    internal_thought: str = Field(
+        description="Step-by-step financial reasoning. Compare values, verify unit scaling (Millions vs Billions), and check mathematical consistency before writing the answer."
+    )
+    extracted_raw_data: str = Field(
+        description="Exact verbatim financial figures, table metrics, percentages, and statements extracted directly from the XML context."
+    )
+    answer: str = Field(
+        description="The final executive-level financial answer formatted professionally. Must be strictly derived from extracted_raw_data."
+    )
+    sources: List[str] = Field(
+        description="List of exact citations used in format: ['ticker - fiscal_year - section - page_number']"
+    )
+---
+4. Production System Prompt:
+You are an elite Chief Financial Officer (CFO) and SEC filings Data Analyst. 
+
+### OBJECTIVE
+Provide precise, highly accurate, and professional answers to the user's financial queries based EXCLUSIVELY on the provided XML documents inside <CONTEXT> tags.
+
+### OPERATIONAL CONSTRAINTS (ZERO-HALLUCINATION POLICY)
+1. CLOSED-BOOK RULE: Rely strictly on the information contained within <CONTEXT>. Do NOT use external pre-trained financial knowledge or make speculative assumptions.
+2. FINANCIAL SYMBOL INTEGRITY: Retain all financial notations, currency symbols, percentages, and sign structures exactly as provided (e.g., $, %, M, B, and parentheses such as (150) indicating negative values).
+3. UNIT SCALE VALIDATION: Always verify scale distinctions (e.g., Thousands vs Millions vs Billions) during comparison.
+4. UNANSWERABLE HANDLING: If the provided XML context lacks sufficient evidence or numbers to answer the user query, set the answer field to:
+   "The requested financial information is not available in the provided reports."
+5. VERIFIABLE CITATIONS: Every claim or metric in `answer` must directly trace back to a specific source tag in `sources`.
+
+### SCHEMA POPULATION GUIDELINES
+- `internal_thought`: Execute step-by-step mental scratchpad logic. Cross-check table rows, verify arithmetic, and confirm scaling.
+- `extracted_raw_data`: Copy verbatim lines, numbers, and table cells from the context.
+- `answer`: Synthesize the comprehensive final response using ONLY the data present in `extracted_raw_data`.
+- `sources`: Populate with explicit document references formatted as "ticker - fiscal_year - section - page_number".
+--
+5. Streaming, Resilience & Guardrails Architecture
+Low-Latency Streaming: Responses leverage astream / ainvoke with stream=True to stream tokens directly to the application UI, minimizing Time-To-First-Token ($TTFT$).
+Resilience & Backoff: API calls utilize Exponential Backoff retry strategy for handling $429\ Rate\ Limit$ or transient network failures, transitioning silently to the Fallback Model when primary retries fail.
+Async Verification & Caching Loop:
+Background Guardrail Check: An asynchronous light worker cross-checks numbers emitted in answer against extracted_raw_data.
+Success Pass: The query, metadata, and generated structured JSON are written to the Redis Semantic Cache for zero-cost instant hits on future identical queries.
+Hallucination Detection: If an unverified figure is identified, the system issues a stream abort, bypasses cache writing, and falls back to a safe refusal message: "Direct arithmetic verification failed for the numbers present in the provided reports."
+--
+
+
+--------------------
+🛠️ Module 6: Observability, Structured Logging & Governance
+The core philosophy of this module is Full System Transparency. It ensures every real-time production query is structurally logged, while providing an offline governance layer (via MLflow) to evaluate pipeline adjustments against strict Quality Gates before deployment.
+
+1. Production Structured Logging (JSON Logs)
+To replace unstructured text logs, every module emits events as validated JSON strings. This standardizes log aggregation (e.g., ELK Stack, Datadog) without requiring complex regex parsing.
+
+📋 JSON Log Schema Implementation
+Python
+import json
+import logging
+import time
+
+logger = logging.getLogger("RAG_Production_Logger")
+logging.basicConfig(level=logging.INFO)
+
+def log_pipeline_event(
+    session_id: str,
+    trace_id: str,
+    step: str,
+    query: str,
+    chunks_count: int,
+    latency_ms: float,
+    status: str = "SUCCESS",
+    error: str = None
+):
+    log_payload = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "session_id": session_id,
+        "trace_id": trace_id,
+        "step": step,
+        "input_query": query,
+        "retrieved_chunks_count": chunks_count,
+        "latency_ms": round(latency_ms, 2),
+        "status": status,
+        "error_message": error
+    }
+    logger.info(json.dumps(log_payload, ensure_ascii=False))
+2. MLflow Experiment Tracking & Governance
+While structured logging handles real-time production monitoring, MLflow Tracking governs offline evaluation benchmarks. Every test run logs parameters, metrics, and artifacts to compare pipeline variations (e.g., Chunk Size changes or Vector DB index tunings).
+
+📊 Logged Parameters & Evaluation Metrics
+Tracked Parameters:
+
+chunk_size (e.g., 512, 768 tokens)
+
+chunk_overlap (e.g., 80 tokens)
+
+embedding_model (nomic-ai/nomic-embed-text-v1.5)
+
+generation_models
+
+---------------
+Deployment : FastAPI, streamlit_app
+========================================

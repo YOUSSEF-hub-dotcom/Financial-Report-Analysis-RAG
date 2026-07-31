@@ -27,7 +27,7 @@ The pipeline resolves common RAG challenges such as table/text disambiguation, s
 
 * **Multi-Format Ingestion Engine**: Automatically parses complex HTML financial tables and text with structure preservation.
 * **Hybrid Storage Architecture**: Store dense vectors in **Qdrant** for high-precision similarity search, while anchoring source metadata & original text in **MongoDB**.
-* **Redis Caching & Latency Optimization**: Instant retrieval for frequent financial queries using Redis semantic caching.
+* **Redis Caching & Latency Optimization**: Instant retrieval for repeated queries using Redis exact-match cache (SHA-256 hash).
 * **System Health & API Warm-up**: Self-healing API endpoints with async model warm-up indicators (`healthy` / `degraded`) built into the Streamlit UI.
 * **Interactive Streamlit Dashboard**: Clean financial chat interface supporting real-time query answers, document context display, and upload capabilities.
 
@@ -58,12 +58,15 @@ pip install -r requirements.txt
 Create a .env file in the root directory:
 
 مقتطف الرمز
-OPENAI_API_KEY=your_openai_key_here
-QDRANT_HOST=localhost
-QDRANT_PORT=6333
-MONGO_URI=mongodb://localhost:27017
-REDIS_HOST=localhost
-REDIS_PORT=6379
+GROQ_API_KEY=gsk_your_key_here
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DB=financial_rag
+QDRANT_PATH=/home/youssef/Financial_RAG/data/qdrant_db  # default: ~/Financial_RAG/data/qdrant_db
+REDIS_URL=redis://localhost:6379/0
+# Optional model overrides:
+# GROQ_PRIMARY_MODEL=llama-3.1-8b-instant
+# GROQ_FALLBACK_MODEL=gemma2-9b-it
+# DATA_DIR=/home/youssef/Financial_RAG/data
 3. Ensure Local Services are Running
 Bash
 # Start MongoDB & Redis

@@ -16,7 +16,7 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 # --- Paths ---
 PROJECT_ROOT: Path = _PROJECT_ROOT
-DATA_DIR: Path = PROJECT_ROOT / "data"
+DATA_DIR: Path = Path(os.getenv("DATA_DIR", str(Path.home() / "Financial_RAG" / "data")))
 LOG_DIR: Path = PROJECT_ROOT / "logs"
 
 # --- API Keys ---
@@ -44,12 +44,12 @@ CHUNK_MAX_TOKENS: int = 768
 CHUNK_OVERLAP_RATIO: float = 0.125  # 12.5% overlap (midpoint of 10-15%)
 
 # --- LLM ---
-GROQ_PRIMARY_MODEL: str = "llama-3.3-70b-versatile"
-GROQ_FALLBACK_MODEL: str = "qwen/qwen3.6-27b"
+GROQ_PRIMARY_MODEL: str = "llama-3.1-8b-instant"
+GROQ_FALLBACK_MODEL: str = "gemma2-9b-it"
 LLM_TEMPERATURE: float = 0.0
 LLM_SEED: int = 42
-LLM_MAX_TOKENS: int = 2048
-LLM_HISTORY_K: int = 6
+LLM_MAX_TOKENS: int = 1524
+LLM_HISTORY_K: int = 3
 
 # --- Supported tickers ---
 SUPPORTED_TICKERS: list[str] = ["AAPL", "MSFT", "NVDA"]
