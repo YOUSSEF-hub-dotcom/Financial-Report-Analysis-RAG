@@ -1,111 +1,197 @@
-# 🚀 [Tips Hindawi](https://www.tipshindawi.com/) Challenge (June–July) 2026
+````markdown
+# 🚀 Financial Report Analysis RAG
 
-> 🏆 This repository is my official submission for the [ **Tips Hindawi** ](https://www.tipshindawi.com/) **Challenge (June–July) 2026**.
+> 🏆 This repository is my official submission for the **Tips Hindawi Challenge (June–July) 2026**.
 
 ## 👤 Participant
 
-| Field            | Value                                |
-| ---------------- | ------------------------------------ |
-| Full Name        | Youssef Mahmoud                      |
-| Project Name     | Financial RAG — AI SEC Filing & Report Analyzer |
-| GitHub Username  | [https://github.com/YOUSSEF-hub-dotcom]               |
-| Challenge Batch  | June–July 2026                       |
-| Training Program | Large Language Models (LLMs) Program |
-| Organization     | [**Edrak for Ai**](https://edrak4ai.com/en)                         |
+| Field | Value |
+|-------|-------|
+| **Full Name** | Youssef Mahmoud AboAli |
+| **Project Name** | Financial Report Analysis RAG |
+| **GitHub Username** | YOUSSEF-hub-dotcom |
+| **Challenge Batch** | June–July 2026 |
+| **Training Program** | Large Language Models (LLMs) Program |
+| **Organization** | Edrak for AI |
 
 ---
 
 # 📖 Project Overview
 
-**Financial RAG** is an enterprise-grade Retrieval-Augmented Generation (RAG) system engineered specifically to parse, chunk, index, and analyze complex SEC Filings (10-K, 10-Q) and financial statements for major tech companies (e.g., Apple, Microsoft, NVIDIA).
+Financial Report Analysis RAG is an end-to-end Retrieval-Augmented Generation (RAG) system designed to analyze financial reports and answer user questions using relevant document context.
 
-The pipeline resolves common RAG challenges such as table/text disambiguation, semantic loss during chunking, and latency during peak usage by leveraging dual-database storage (Qdrant Vector DB + MongoDB Document Store) alongside Redis caching and robust async API warm-up mechanisms.
+The project consists of two main phases:
+
+- **Offline Ingestion:** Parsing financial documents, extracting metadata, chunking content, generating embeddings, and indexing data into MongoDB and Qdrant.
+- **Online Retrieval & Generation:** Retrieving relevant document chunks, generating answers using Groq LLMs, validating responses through guardrails, and returning structured JSON outputs.
+
+The system also provides a FastAPI backend, Streamlit dashboard, Redis caching, and MLflow experiment tracking.
 
 ---
 
 # ✨ Features
 
-* **Multi-Format Ingestion Engine**: Automatically parses complex HTML financial tables and text with structure preservation.
-* **Hybrid Storage Architecture**: Store dense vectors in **Qdrant** for high-precision similarity search, while anchoring source metadata & original text in **MongoDB**.
-* **Redis Caching & Latency Optimization**: Instant retrieval for frequent financial queries using Redis semantic caching.
-* **System Health & API Warm-up**: Self-healing API endpoints with async model warm-up indicators (`healthy` / `degraded`) built into the Streamlit UI.
-* **Interactive Streamlit Dashboard**: Clean financial chat interface supporting real-time query answers, document context display, and upload capabilities.
+- Financial document ingestion and preprocessing.
+- HTML table parsing and Markdown conversion.
+- Metadata extraction for financial documents.
+- Hybrid 3-tier chunking strategy.
+- Dual storage architecture using MongoDB and Qdrant.
+- Vector search with metadata filtering.
+- Response generation using Groq Large Language Models.
+- Automatic model fallback mechanism.
+- Async guardrail validation for numerical verification.
+- Redis query caching.
+- REST API using FastAPI.
+- Interactive Streamlit dashboard.
+- MLflow experiment tracking and structured logging.
 
 ---
 
 # 🛠️ Technologies Used
 
-* **Language & Frameworks**: Python 3.12, FastAPI, Streamlit, PyTorch (CUDA acceleration)
-* **Vector Database**: Qdrant
-* **Document & Cache Storage**: MongoDB, Redis
-* **LLM & Embeddings Engine**: HuggingFace Transformers, Sentence-Transformers, OpenAI API
-* **Evaluation & Experiment Tracking**: MLflow, Pytest
-* **Data Processing**: PyPDF, python-docx, html5lib, PyPDF2
+### Programming Language
+
+- Python 3.11+
+
+### Data Processing
+
+- BeautifulSoup4
+- lxml
+- Pandas
+- Tabulate
+- tiktoken
+
+### AI & LLM
+
+- LangChain
+- LangChain-Groq
+- Groq
+- llama-3.3-70b-versatile
+- qwen/qwen3.6-27b
+- nomic-ai/nomic-embed-text-v1.5
+
+### Databases
+
+- MongoDB
+- Qdrant
+- Redis
+
+### Backend
+
+- FastAPI
+- Uvicorn
+
+### Dashboard
+
+- Streamlit
+
+### Monitoring
+
+- MLflow
+- Structured JSON Logging
+
+### Configuration
+
+- python-dotenv
 
 ---
 
 # ⚙️ Installation
 
-### 1. Clone the Repository & Setup Virtual Environment
+Clone the repository:
+
 ```bash
-git clone [https://github.com/](https://github.com/)[YOUR_GITHUB_USERNAME]/[YOUR_REPO_NAME].git
+git clone <repository-url>
+```
+
+Move into the project directory:
+
+```bash
 cd Financial_RAG
+```
 
-python3.12 -m venv Financial_env
-source Financial_env/bin/activate
+Install the required dependencies:
+
+```bash
 pip install -r requirements.txt
-2. Environment Variables Setup
-Create a .env file in the root directory:
+```
 
-مقتطف الرمز
-OPENAI_API_KEY=your_openai_key_here
-QDRANT_HOST=localhost
-QDRANT_PORT=6333
-MONGO_URI=mongodb://localhost:27017
-REDIS_HOST=localhost
-REDIS_PORT=6379
-3. Ensure Local Services are Running
-Bash
-# Start MongoDB & Redis
-sudo service redis-server start
-sudo mongod --dbpath /var/lib/mongodb --fork --logpath /var/log/mongodb/mongod.log
-🚀 Usage
-Step 1: Run Ingestion Pipeline
-To parse SEC HTML filings and populate vector embeddings into Qdrant & MongoDB:
+Create a `.env` file and configure the required environment variables before running the project.
 
-Bash
-python src/1_ingestion/run_ingestion.py
-Step 2: Start the FastAPI Backend
-Bash
-uvicorn app.api.main:app --reload --port 8000
-Step 3: Launch the Streamlit Frontend
-Bash
+Run the FastAPI server:
+
+```bash
+uvicorn app.api.main:app --reload
+```
+
+Run the Streamlit dashboard:
+
+```bash
 streamlit run app/ui/streamlit_app.py
-Open http://localhost:8501 in your browser to interact with the system.
+```
 
-📸 Demo
-(Add screenshots or GIFs of your Streamlit UI showing the Green Health Status and Chat Answers here)
+---
 
-📈 Results
-Successfully ingested over 700+ high-density chunks across SEC financial reports with zero structure loss.
+# 🚀 Usage
 
-Reduced first-query latency via async backend warm-up routines.
+1. Prepare a supported financial document.
+2. Run the ingestion pipeline to parse and index the document.
+3. Store document metadata in MongoDB and vector embeddings in Qdrant.
+4. Launch the FastAPI service or Streamlit dashboard.
+5. Submit financial questions.
+6. Retrieve the most relevant document context.
+7. Generate validated answers through the RAG pipeline.
 
-Achieved seamless 1-to-1 chunk mapping between Qdrant vector IDs and MongoDB raw document logs.
+---
 
-🔮 Future Improvements
-Integrate GraphRAG (Knowledge Graphs) for entity-relationship tracking across financial quarters.
+# 📸 Demo
 
-Implement cross-encoder reranking (e.g., Cohere/BGE Reranker) for top-k retrieval enhancement.
+You can include:
 
-Add native multi-modal support for financial charts and infographic PDF extractions.
+- Streamlit Dashboard
+- FastAPI Swagger Interface
+- Document Upload Page
+- Chat Interface
+- Sample Financial Question & Answer
 
-📚 About the Challenge
-This project was developed as part of the Tips Hindawi Challenge (June–July) 2026.
+---
 
-Tips Hindawi is the internships department of Edrak for Ai, and the challenge encourages participants to build real-world projects, apply practical skills, and showcase their work through GitHub.
+# 📈 Results
 
-For more information about the challenge, training programs, and upcoming batches, visit the official Tips Hindawi website.
+### Project Status
 
-📄 License
+- ✅ Offline Ingestion Pipeline completed.
+- ✅ Generation Engine completed.
+- ✅ Pipeline Orchestrator completed.
+- ✅ FastAPI Backend completed.
+- ✅ Multi-format Upload Parser completed.
+- ✅ Streamlit Dashboard completed.
+
+### Testing
+
+- **148 / 148 Unit Tests Passed**
+
+The project is fully implemented and ready for deployment.
+
+---
+
+# 🔮 Future Improvements
+
+- Deployment of the complete system.
+- Production infrastructure setup.
+- Continuous monitoring and maintenance.
+
+---
+
+# 📚 About the Challenge
+
+This project was developed as part of the **Tips Hindawi Challenge (June–July 2026)** under the **Large Language Models (LLMs) Program**.
+
+The challenge encourages participants to build practical AI solutions, apply software engineering best practices, and publish production-oriented projects through GitHub.
+
+---
+
+# 📄 License
+
 This project is shared for educational and portfolio purposes.
+````
